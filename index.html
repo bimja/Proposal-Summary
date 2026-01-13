@@ -1,0 +1,322 @@
+
+<!-- Design Proposal Generator (Excel → PDF), styled to match your document -->
+
+<div id="proposal-app" style="font-family: Arial, sans-serif; max-width: 960px; margin: 1rem auto;">
+  <!-- BRAND / HEADER INPUTS -->
+  <fieldset style="border: 1px solid #ddd; border-radius: 8px; padding: 12px;">
+    <legend style="font-weight: bold;">Header & Branding</legend>
+    <div style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
+      <label>Company / Firm
+        <input id="companyName" type="text" value="mdi & associates llc" style="width:100%; padding:8px;">
+      </label>
+      <label>Document Title
+        <input id="docTitle" type="text" value="building design proposal" style="width:100%; padding:8px;">
+      </label>
+      <label>Client / Company
+        <input id="clientName" type="text" placeholder="ACME, Inc." style="width:100%; padding:8px;">
+      </label>
+      <label>Project / Job
+        <input id="projectName" type="text" placeholder="Covered Patio Addition" style="width:100%; padding:8px;">
+      </label>
+      <label>Proposal #
+        <input id="proposalId" type="text" placeholder="PR-2025-001" style="width:100%; padding:8px;">
+      </label>
+      <label>Prepared by
+        <input id="preparedBy" type="text" value="William Burton" style="width:100%; padding:8px;">
+      </label>
+    </div>
+
+    <!-- Optional logos / images -->
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px;">
+      <label>Company Logo (optional)
+        <input id="logoFile" type="file" accept="image/*" style="width:100%;">
+      </label>
+      <label>Design Intent Image (optional)
+        <input id="heroFile" type="file" accept="image/*" style="width:100%;">
+      </label>
+    </div>
+  </fieldset>
+
+  <!-- PROPOSAL SUMMARY & SCOPE -->
+  <fieldset style="border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-top: 12px;">
+    <legend style="font-weight: bold;">Narrative Sections</legend>
+    <label style="display:block; margin-bottom:6px;"><strong>Proposal Summary</strong>
+      <textarea id="summaryText" rows="5" style="width:100%; padding:8px;">
+We are pleased to submit this proposal contract for the above-referenced project. The purpose of this proposal is to obtain your authorization for the scope of work requested and confirm the terms under which these services are provided as shown below.
+      </textarea>
+    </label>
+
+    <details style="margin-top:8px;">
+      <summary><strong>Scope of Work (type manually or import from Excel “Scope” sheet)</strong></summary>
+      <div style="display:grid; grid-template-columns: 1fr 120px; gap: 12px; margin-top: 8px;">
+        <textarea id="scopeBullets" rows="6" style="width:100%; padding:8px;">Provide Design Documents for a Covered Patio Addition consisting of column foundations, 30 ft (±) x 22 ft (±) clear-span architectural truss and vaulted ceiling with asphalt roofing to match existing.
+Proposed addition extends east from existing game room toward the pool; NE open view is essential.
+Columns to be covered with stacked stone (final selection by client) with moisture protection.
+Design of bearing beam over existing game room entry door.
+Site plan not included.
+Covered patio electrical (lights, outlets, panel calcs) not included.</textarea>
+        <button id="importScopeBtn" style="padding:10px 12px;">Import from Excel</button>
+      </div>
+    </details>
+  </fieldset>
+
+  <!-- Excel upload + preview -->
+  <fieldset style="border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-top: 12px;">
+    <legend style="font-weight: bold;">Line Items (Excel)</legend>
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <input id="xlfile" type="file" accept=".xlsx,.xls" style="margin: 8px 0;">
+      <button id="previewBtn" style="padding:10px 12px;">Preview</button>
+      <button id="generateBtn" style="padding:10px 14px; background:#1a73e8; color:#fff; border:none;">
+        Generate Proposal PDF
+      </button>
+    </div>
+    <p style="font-size:0.9rem; color:#555; margin-top:6px;">
+      Expected sheet columns: <strong>Item</strong>, <strong>Description</strong>, <strong>Qty</strong>, <strong>Unit Price</strong>.
+      (Optional second sheet named <em>Scope</em> with a <strong>Task</strong> column to auto-fill bullets.)
+    </p>
+    <div id="preview" style="overflow:auto; border:1px solid #ddd; border-radius:8px; padding:12px; margin-top:12px;"></div>
+  </fieldset>
+</div>
+
+<!-- SheetJS (read Excel) -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<!-- jsPDF + AutoTable (generate PDF) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.5.28/dist/jspdf.plugin.autotable.min.js"></script>
+
+<script>
+(function () {
+  let rows = [];         // parsed line items from Excel
+  let scopeRows = [];    // optional scope tasks from Excel
+  let logoDataURL = null, heroDataURL = null;
+
+  // Read image files as data URLs for PDF embedding
+  function readImageAsDataURL(file) {
+    return new Promise((resolve) => {
+      if (!file) return resolve(null);
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Parse Excel: first sheet = line items, optional "Scope" sheet = bullets
+  async function parseExcel(file) {
+    const arrayBuffer = await file.arrayBuffer();
+    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+    // Line items from the FIRST sheet
+    const firstSheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[firstSheetName];
+    rows = XLSX.utils.sheet_to_json(sheet, { raw: true });
+
+    // Optional Scope sheet
+    const scopeSheetName = workbook.SheetNames.find(n => n.trim().toLowerCase() === 'scope');
+    scopeRows = [];
+    if (scopeSheetName) {
+      const sSheet = workbook.Sheets[scopeSheetName];
+      const scopeJSON = XLSX.utils.sheet_to_json(sSheet, { raw: true });
+      scopeRows = scopeJSON
+        .map(r => r.Task ?? r.task ?? r.Scope ?? '')
+        .filter(t => String(t).trim().length > 0);
+    }
+  }
+
+  // Render HTML preview of line items
+  function renderPreview() {
+    if (!rows.length) {
+      document.getElementById('preview').innerHTML =
+        '<em>No rows parsed. Upload Excel and click Preview.</em>';
+      return;
+    }
+    const headers = ['Item', 'Description', 'Qty', 'Unit Price'];
+    const normalized = rows.map(r => ({
+      Item: r.Item ?? '',
+      Description: r.Description ?? '',
+      Qty: Number(r.Qty ?? 0),
+      'Unit Price': Number(r['Unit Price'] ?? 0)
+    }));
+
+    const total = normalized.reduce((sum, r) => sum + r.Qty * r['Unit Price'], 0);
+    const th = headers.map(h => `<th style="text-align:left; padding:8px; border-bottom:1px solid #ddd;">${h}</th>`).join('');
+    const trs = normalized.map(r => `
+      <tr>
+        <td style="padding:6px;">${r.Item}</td>
+        <td style="padding:6px;">${r.Description}</td>
+        <td style="padding:6px; text-align:right;">${r.Qty}</td>
+        <td style="padding:6px; text-align:right;">$${(r['Unit Price']).toFixed(2)}</td>
+      </tr>`).join('');
+
+    document.getElementById('preview').innerHTML = `
+      <table style="width:100%; border-collapse:collapse;">
+        <thead><tr>${th}</tr></thead>
+        <tbody>${trs}</tbody>
+      </table>
+      <div style="text-align:right; margin-top:10px;">
+        <strong>Subtotal:</strong> $${total.toFixed(2)} &nbsp; | &nbsp;
+        <strong>Deposit (50%):</strong> $${(total * 0.5).toFixed(2)}
+      </div>`;
+  }
+
+  // Import scope bullets from Excel (if parsed)
+  document.getElementById('importScopeBtn').addEventListener('click', () => {
+    if (!scopeRows.length) { alert('No “Scope” sheet found or it’s empty.'); return; }
+    document.getElementById('scopeBullets').value = scopeRows.join('\n');
+  });
+
+  // Build the PDF in a layout matching your Design Proposal document
+  async function generatePDF() {
+    if (!rows.length) { alert('Please upload Excel and click Preview first.'); return; }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+
+    // Gather inputs
+    const company = document.getElementById('companyName').value || '';
+    const title = document.getElementById('docTitle').value || '';
+    const client = document.getElementById('clientName').value || '';
+    const project = document.getElementById('projectName').value || '';
+    const proposalId = document.getElementById('proposalId').value || '';
+    const preparedBy = document.getElementById('preparedBy').value || '';
+    const summaryText = (document.getElementById('summaryText').value || '').trim();
+    const scopeBullets = (document.getElementById('scopeBullets').value || '')
+      .split('\n').map(s => s.trim()).filter(s => s.length > 0);
+
+    // Optional images
+    if (!logoDataURL) logoDataURL = await readImageAsDataURL(document.getElementById('logoFile').files[0]);
+    if (!heroDataURL) heroDataURL = await readImageAsDataURL(document.getElementById('heroFile').files[0]);
+
+    // Top band / header
+    doc.setFillColor(240, 240, 240);
+    doc.rect(0, 0, doc.internal.pageSize.getWidth(), 72, 'F');
+
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
+    doc.text(company, 40, 45);
+
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(18);
+    doc.text(title, 40, 70);
+
+    // Logo at top-right if provided
+    if (logoDataURL) {
+      try { doc.addImage(logoDataURL, 'PNG', doc.internal.pageSize.getWidth() - 140, 20, 100, 40); } catch(e) {}
+    }
+
+    // Meta block under header
+    const today = new Date();
+    const dateStr = today.toLocaleDateString();
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
+    doc.text(`Date: ${dateStr}`, 40, 98);
+    doc.text(`Proposal #: ${proposalId}`, 40, 114);
+    doc.text(`Prepared by: ${preparedBy}`, 40, 130);
+    doc.text(`Client: ${client}`, 300, 98);
+    doc.text(`Project: ${project}`, 300, 114);
+
+    // Section: Proposal Summary (bold + underline style)
+    let y = 160;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
+    doc.text('Proposal Summary:', 40, y);
+    // underline
+    const tw = doc.getTextWidth('Proposal Summary:');
+    doc.setDrawColor(0); doc.setLineWidth(0.6);
+    doc.line(40, y + 2, 40 + tw, y + 2);
+    y += 18;
+
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
+    const summaryLines = doc.splitTextToSize(summaryText, 520);
+    doc.text(summaryLines, 40, y);
+    y += summaryLines.length * 14 + 8;
+
+    // Optional “Finished Design Intent” image
+    if (heroDataURL) {
+      const pageW = doc.internal.pageSize.getWidth();
+      const imgW = Math.min(520, pageW - 80);
+      const imgH = imgW * 0.56; // approx 16:9
+      try { doc.addImage(heroDataURL, 'PNG', 40, y, imgW, imgH); y += imgH + 12; } catch(e) {}
+    }
+
+    // Section: Scope of Work
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
+    doc.text('SCOPE OF WORK:', 40, y);
+    const tw2 = doc.getTextWidth('SCOPE OF WORK:');
+    doc.line(40, y + 2, 40 + tw2, y + 2);
+    y += 16;
+
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
+    const bulletX = 52;
+    scopeBullets.forEach(b => {
+      const lines = doc.splitTextToSize(b, 510);
+      doc.circle(44, y - 4, 1.6, 'F'); // bullet dot
+      doc.text(lines, bulletX, y);
+      y += lines.length * 14 + 4;
+      // If near page bottom, add page
+      if (y > doc.internal.pageSize.getHeight() - 120) {
+        doc.addPage(); y = 72;
+      }
+    });
+
+    // Section: Breakout by drawings / line items table
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
+    doc.text('Breakout by drawings:', 40, y);
+    y += 10;
+
+    const body = rows.map(r => ([
+      r.Item ?? '',
+      r.Description ?? '',
+      Number(r.Qty ?? 0),
+      Number(r['Unit Price'] ?? 0).toFixed(2),
+      (Number(r.Qty ?? 0) * Number(r['Unit Price'] ?? 0)).toFixed(2)
+    ]));
+
+    doc.autoTable({
+      startY: y + 6,
+      head: [['Item', 'Description', 'Qty', 'Unit Price', 'Line Total']],
+      body,
+      styles: { fontSize: 10, cellPadding: 5 },
+      headStyles: { fillColor: [26, 115, 232], textColor: 255 },
+      columnStyles: {
+        2: { halign: 'right', cellWidth: 50 },
+        3: { halign: 'right', cellWidth: 80 },
+        4: { halign: 'right', cellWidth: 90 }
+      },
+      didDrawPage: function (data) {
+        // header repeat
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+        doc.text(company, 40, 30);
+        doc.text(title, 40, 44);
+      }
+    });
+
+    const subtotal = body.reduce((s, r) => s + Number(r[4]), 0);
+    let afterTableY = doc.lastAutoTable.finalY + 16;
+
+    // Fees & Payment terms (styled as in your doc)
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
+    doc.text('Fees & Payment:', 40, afterTableY);
+    const tw3 = doc.getTextWidth('Fees & Payment:');
+    doc.line(40, afterTableY + 2, 40 + tw3, afterTableY + 2);
+    afterTableY += 16;
+
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
+    doc.text(`Subtotal: $${subtotal.toFixed(2)}`, 40, afterTableY);
+    doc.text(`Deposit (50%): $${(subtotal * 0.5).toFixed(2)} due at authorization.`, 40, afterTableY + 16);
+    doc.text(`Balance (50%): $${(subtotal * 0.5).toFixed(2)} due upon delivery.`, 40, afterTableY + 32);
+
+    // Footer terms
+    const footerY = afterTableY + 60;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+    doc.text('Terms: Pricing valid 30 days. Scope excludes site plan and electrical unless noted. See contract for full conditions.', 40, footerY);
+
+    // Save
+    doc.save(`${proposalId || 'proposal'}.pdf`);
+  }
+
+  // Event bindings
+  document.getElementById('previewBtn').addEventListener('click', async () => {
+    const file = document.getElementById('xlfile').files[0];
+    if (!file) { alert('Choose an Excel file first.'); return; }
+    await parseExcel(file);
+    renderPreview();
+  });
+
+  document.getElementById('generateBtn').addEventListener('click', generatePDF);
+
+})();
+</script>
