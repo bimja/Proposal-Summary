@@ -103,7 +103,13 @@ Covered patio electrical (lights, outlets, panel calcs) not included.</textarea>
   async function parseExcel(file) {
     const arrayBuffer = await file.arrayBuffer();
     const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-    rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { raw: true });
+    // Filter out rows with zero Qty or zero Unit Price (hide empty/$0 line items)
+    rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { raw: true })
+      .filter(r => {
+        const qty = Number(r.Qty ?? r.qty ?? 0);
+        const price = Number(r['Unit Price'] ?? r['unit price'] ?? r.UnitPrice ?? 0);
+        return qty !== 0 && price !== 0;
+      });
 
     const scopeSheet = workbook.SheetNames.find(n => n.toLowerCase() === 'scope');
     if (scopeSheet) {
@@ -308,4 +314,3 @@ Covered patio electrical (lights, outlets, panel calcs) not included.</textarea>
 </script>
 </body>
 </html>
-
