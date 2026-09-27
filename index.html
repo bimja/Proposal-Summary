@@ -91,7 +91,7 @@ Covered patio electrical (lights, outlets, panel calcs) not included.</textarea>
     </div>
     <p class="hint">Expected columns: Item, Description, Qty, Unit Price</p>
 
-    <div style="display:grid; grid-template-columns: 160px 140px 1fr; gap: 12px; margin-top: 16px;">
+    <div style="display:grid; grid-template-columns: 150px 130px 190px 1fr; gap: 12px; margin-top: 16px;">
       <label>Discount type
         <select id="discountType">
           <option value="none">None</option>
@@ -102,11 +102,21 @@ Covered patio electrical (lights, outlets, panel calcs) not included.</textarea>
       <label>Discount amount
         <input id="discountAmount" type="number" min="0" step="0.01" value="0">
       </label>
+      <label>Discount reason
+        <select id="discountReason">
+          <option value="">— Select —</option>
+          <option value="Preferred client">Preferred client</option>
+          <option value="First-time customer">First-time customer</option>
+          <option value="Veteran">Veteran</option>
+          <option value="Repeat client">Repeat client</option>
+          <option value="custom">Custom (use note)</option>
+        </select>
+      </label>
       <label>Discount note (optional)
-        <input id="discountLabel" type="text" placeholder="e.g. Repeat client, package rate">
+        <input id="discountLabel" type="text" placeholder="Optional detail or custom reason">
       </label>
     </div>
-    <p class="hint">Discount is taken off the line-item subtotal. Deposit and balance are 50/50 of the discounted total.</p>
+    <p class="hint">Discount is taken off the line-item subtotal. Deposit and balance are 50/50 of the discounted total. Pick a reason to label the discount line; the note adds detail in parentheses, or is used as the label when the reason is Custom or blank.</p>
     <div id="preview" style="margin-top:12px; border:1px solid #eee; padding:12px; min-height:120px;"></div>
   </fieldset>
 </div>
@@ -124,8 +134,10 @@ Covered patio electrical (lights, outlets, panel calcs) not included.</textarea>
   const FIELD_IDS = [
     'companyName', 'docTitle', 'clientName', 'projectName',
     'proposalId', 'preparedBy', 'summaryText', 'scopeBullets',
-    'discountType', 'discountAmount', 'discountLabel'
+    'discountType', 'discountAmount', 'discountReason', 'discountLabel'
   ];
+
+  const DISCOUNT_REASONS = ['Preferred client', 'First-time customer', 'Veteran', 'Repeat client'];
 
   function money(n) {
     return '$' + Number(n || 0).toFixed(2);
@@ -141,7 +153,10 @@ Covered patio electrical (lights, outlets, panel calcs) not included.</textarea>
   }
 
   function applyForm(data) {
-    Object.keys(data || {}).forEach(k => {
+    data = data || {};
+    // Older saves/JSON files predate discountReason: clear it so the note is used as before.
+    if (!('discountReason' in data)) document.getElementById('discountReason').value = '';
+    Object.keys(data).forEach(k => {
       const el = document.getElementById(k);
       if (el) el.value = data[k];
     });
@@ -160,6 +175,8 @@ Covered patio electrical (lights, outlets, panel calcs) not included.</textarea>
     const type = document.getElementById('discountType').value || 'none';
     const amount = Math.max(0, Number(document.getElementById('discountAmount').value) || 0);
     const label = (document.getElementById('discountLabel').value || '').trim();
+    const reasonEl = document.getElementById('discountReason');
+    const reason = reasonEl ? (reasonEl.value || '') : '';
     let discount = 0;
     let caption = 'Discount';
 
@@ -172,10 +189,16 @@ Covered patio electrical (lights, outlets, panel calcs) not included.</textarea>
     }
 
     if (discount > subtotal) discount = subtotal;
-    if (label) caption += ' — ' + label;
+    if (DISCOUNT_REASONS.includes(reason)) {
+      caption += ' — ' + reason;
+      if (label) caption += ' (' + label + ')';
+    } else if (label) {
+      // 'custom' or no reason selected: use the free-text note as before.
+      caption += ' — ' + label;
+    }
 
     const total = Math.max(0, subtotal - discount);
-    return { type, amount, label, discount, caption, total };
+    return { type, amount, reason, label, discount, caption, total };
   }
 
   async function parseExcel(file) {
@@ -358,7 +381,8 @@ Covered patio electrical (lights, outlets, panel calcs) not included.</textarea>
     if (d.discount > 0) {
       fy += 18;
       doc.setTextColor(19, 115, 51);
-      doc.text(d.caption + ': −' + money(d.discount), 40, fy);
+      // Plain ASCII hyphen: jsPDF's standard Helvetica has no U+2212 minus glyph.
+      doc.text(d.caption + ': -' + money(d.discount), 40, fy);
       doc.setTextColor(0, 0, 0);
     }
     fy += 18;
@@ -412,7 +436,7 @@ Covered patio electrical (lights, outlets, panel calcs) not included.</textarea>
     else alert('No Scope sheet found in the last Excel file.');
   });
 
-  ['discountType', 'discountAmount', 'discountLabel'].forEach(id => {
+  ['discountType', 'discountAmount', 'discountReason', 'discountLabel'].forEach(id => {
     document.getElementById(id).addEventListener('input', renderPreview);
     document.getElementById(id).addEventListener('change', renderPreview);
   });
@@ -461,6 +485,7 @@ Covered patio electrical (lights, outlets, panel calcs) not included.</textarea>
     document.getElementById('projectName').value = '';
     document.getElementById('discountType').value = 'none';
     document.getElementById('discountAmount').value = '0';
+    document.getElementById('discountReason').value = '';
     document.getElementById('discountLabel').value = '';
     renderPreview();
   });
